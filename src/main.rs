@@ -7,13 +7,14 @@ mod player;
 mod renderer3d;
 mod caster;
 mod events;
+mod texture; // <-- NUEVO
 
 use crate::framebuffer::Framebuffer;
 use crate::maze::{load_maze, make_maze, Maze};
 use crate::player::Player;
 use crate::renderer3d::render3d;
-use crate::caster::cast_ray;
 use crate::events::process_events;
+use crate::texture::Texture; // <-- NUEVO
 use raylib::prelude::*;
 use std::env;
 
@@ -26,8 +27,7 @@ fn main() {
         .title("Maze Raycaster 3D")
         .build();
 
-    let mut framebuffer =
-        Framebuffer::new(screen_w as u32, screen_h as u32);
+    let mut framebuffer = Framebuffer::new(screen_w as u32, screen_h as u32);
 
     // 2) Carga o genera el laberinto
     let args: Vec<String> = env::args().collect();
@@ -57,20 +57,34 @@ fn main() {
         p
     };
 
+    // 3.1) Cargar textura de pared desde assets/  
+   
+    let tex_path = format!(
+        "{}/assets/bricks.jpg",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let wall_tex = Texture::from_file(&tex_path)
+        .expect("No se pudo cargar la textura de pared (JPG/PNG) en assets/");
+
     // 4) Bucle principal
-    while !rl.window_should_close() {
-        // 4.1 – manejo de input (rotar y mover jugador)
-        process_events(&rl, &mut player);
+   while !rl.window_should_close() {
+    let dt = rl.get_frame_time(); // segundos desde el frame anterior
 
-        let mut d = rl.begin_drawing(&thread);
-        framebuffer.clear(Color::BLACK);
+    // ahora pasamos maze, block_size y dt
+    process_events(&rl, &mut player, &maze, block_size, dt);
 
-       
-        // 4.3 – render 3D estilo “Wolfenstein”
-        render3d(&mut framebuffer, &maze, &player, block_size);
+    let mut d = rl.begin_drawing(&thread);
+    framebuffer.clear(Color::BLACK);
 
-        // 4.4 – pinta todo en pantalla
-        framebuffer.draw(&mut d);
-        d.draw_text("←→ rotan, ↑↓ caminan", 10, 10, 20, Color::WHITE);
-    }
+    // render 3D (con textura)
+    render3d(&mut framebuffer, &maze, &player, block_size, &wall_tex);
+
+    // FPS visible (requisito del proyecto)
+   
+
+    framebuffer.draw(&mut d);
+    let fps = d.get_fps();
+    d.draw_text(&format!("FPS: {}", fps), screen_w - 90, 10, 20, Color::YELLOW);
+    d.draw_text("←→ rotan, ↑↓ caminan", 10, 10, 20, Color::WHITE);
+}
 }

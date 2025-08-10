@@ -1,11 +1,11 @@
 // src/renderer3d.rs
-
 use raylib::color::Color;
 use crate::{
     framebuffer::Framebuffer,
     maze::Maze,
     player::Player,
-    caster::{cast_ray, Intersect},
+    caster::cast_ray,
+    texture::Texture, // <-- para el tipo de textura
 };
 
 pub fn render3d(
@@ -13,13 +13,14 @@ pub fn render3d(
     maze: &Maze,
     player: &Player,
     block_size: usize,
+    wall_tex: &Texture, // <-- NUEVO argumento
 ) {
     let num_rays        = framebuffer.width;
     let hw              = framebuffer.width  as f32 / 2.0;
     let hh              = framebuffer.height as f32 / 2.0;
     let dist_proj_plane = hw / (player.fov / 2.0).tan();
 
-    // 1) Pintar cielo (mitad superior)
+    // 1) Pintar cielo
     framebuffer.set_current_color(Color::SKYBLUE);
     for y in 0..(hh as u32) {
         for x in 0..framebuffer.width {
@@ -27,7 +28,7 @@ pub fn render3d(
         }
     }
 
-    // 2) Pintar suelo (mitad inferior)
+    // 2) Pintar suelo
     framebuffer.set_current_color(Color::BLACK);
     for y in (hh as u32)..framebuffer.height {
         for x in 0..framebuffer.width {
@@ -35,45 +36,74 @@ pub fn render3d(
         }
     }
 
-    // Máxima distancia para sombreado (ancho del laberinto en “unidades de bloque”)
     let max_distance = (maze[0].len() * block_size) as f32;
-    // Anchura de cada stake en píxeles
     let step = 2;
 
-    // 3) Por cada “columna” de píxeles, lanzamos un rayo
+    // 3) Raycasting con textura
     for col in (0..num_rays).step_by(step as usize) {
         let current_ray = col as f32 / num_rays as f32;
         let angle = player.a - (player.fov / 2.0)
                   + (player.fov * current_ray);
 
-        // Intersect contiene distancia al muro y qué muro (char)
-        let Intersect { distance, impact } =
-            cast_ray(framebuffer, maze, player, angle, block_size, false);
+        let hit = cast_ray(framebuffer, maze, player, angle, block_size, false);
+        let distance = hit.distance.max(0.0001);
 
-        // Calcula la altura de la stake
-        let stake_height = (block_size as f32 / distance) * dist_proj_plane;
-        let top    = (hh - stake_height / 2.0).max(0.0) as usize;
-        let bottom = (hh + stake_height / 2.0)
-                    .min(framebuffer.height as f32) as usize;
+        let dist_perp = distance * (angle - player.a).cos();
+        let stake_height = (block_size as f32 / dist_perp) * dist_proj_plane;
+        let top    = (hh - stake_height / 2.0).max(0.0) as i32;
+        let bottom = (hh + stake_height / 2.0).min(framebuffer.height as f32) as i32;
 
-        // Color base según tipo de muro
-        let base = match impact {
-            '#' => Color::GRAY,
-            _   => Color::DARKGRAY,
+        // Punto de impacto
+        let hit_x = player.pos.x + distance * angle.cos();
+        let hit_y = player.pos.y + distance * angle.sin();
+
+        // Coordenadas dentro del bloque
+        let lx = ((hit_x as i32 % block_size as i32) + block_size as i32) % block_size as i32;
+        let ly = ((hit_y as i32 % block_size as i32) + block_size as i32) % block_size as i32;
+
+        // Detectar lado y coord U
+        let to_left   = lx;
+        let to_right  = (block_size as i32 - 1) - lx;
+        let to_top    = ly;
+        let to_bottom = (block_size as i32 - 1) - ly;
+
+        let (_, mut u) = {
+            let min_vert = to_left.min(to_right);
+            let min_hori = to_top.min(to_bottom);
+            if min_vert <= min_hori {
+                (true,  ly as f32 / (block_size.saturating_sub(1)) as f32)
+            } else {
+                (false, lx as f32 / (block_size.saturating_sub(1)) as f32)
+            }
         };
-        // Factor de sombreado (1.0 cerca → 0.0 lejos)
-        let shade = 1.0 - (distance / max_distance).min(1.0);
-        let col_r = (base.r as f32 * shade) as u8;
-        let col_g = (base.g as f32 * shade) as u8;
-        let col_b = (base.b as f32 * shade) as u8;
-        let shaded = Color::new(col_r, col_g, col_b, 255);
-        framebuffer.set_current_color(shaded);
+        if u < 0.0 { u += 1.0; }
 
-        // Dibuja la stake de ancho `step`
+        // Sombreado por distancia
+        let shade = 1.0 - (distance / max_distance).min(1.0);
+
+        // Dibujar columna texturizada
+        let y0 = top.max(0);
+        let y1 = bottom.min(framebuffer.height as i32 - 1);
+        let denom = (y1 - y0).max(1) as f32;
+
         for dx in 0..step {
-            let x = (col + dx as u32).min(framebuffer.width - 1);
-            for y in top..bottom {
-                framebuffer.set_pixel(x, y as u32);
+            let x_screen = (col + dx as u32).min(framebuffer.width - 1) as i32;
+
+            for y in y0..=y1 {
+                let v = (y - y0) as f32 / denom; // 0..1 vertical
+
+                let texel = wall_tex.sample(u, v);
+                let a = ((texel >> 24) & 0xFF) as u8;
+                let mut r = ((texel >> 16) & 0xFF) as f32;
+                let mut g = ((texel >> 8)  & 0xFF) as f32;
+                let mut b = ( texel        & 0xFF) as f32;
+
+                r *= shade;
+                g *= shade;
+                b *= shade;
+
+                framebuffer.set_current_color(Color::new(r as u8, g as u8, b as u8, a));
+                framebuffer.set_pixel(x_screen as u32, y as u32);
             }
         }
     }
