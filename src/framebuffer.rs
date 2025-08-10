@@ -1,8 +1,8 @@
 use raylib::prelude::*;
 
 pub struct Framebuffer {
-   pub width:  u32,
-pub height: u32,
+    pub width:  u32,
+    pub height: u32,
     buffer: Vec<Color>,
     current_color: Color,
 }
@@ -15,6 +15,12 @@ impl Framebuffer {
             buffer: vec![Color::BLACK; (width * height) as usize],
             current_color: Color::WHITE,
         }
+    }
+
+    pub fn resize(&mut self, w: u32, h: u32) {
+        self.width = w;
+        self.height = h;
+        self.buffer.resize((w * h) as usize, Color::BLACK);
     }
 
     pub fn set_current_color(&mut self, color: Color) {

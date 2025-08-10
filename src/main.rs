@@ -7,36 +7,47 @@ mod player;
 mod renderer3d;
 mod caster;
 mod events;
-mod texture; // <-- NUEVO
+mod texture;
+mod textures;
+mod minimap; 
+use minimap::{draw_minimap, MiniMapOpts, Corner};
 
 use crate::framebuffer::Framebuffer;
 use crate::maze::{load_maze, make_maze, Maze};
 use crate::player::Player;
 use crate::renderer3d::render3d;
 use crate::events::process_events;
-use crate::texture::Texture; // <-- NUEVO
+use crate::texture::Texture;
+use crate::textures::TextureAtlas;
 use raylib::prelude::*;
 use std::env;
+use std::path::Path;
+use std::rc::Rc;
 
 fn main() {
     // 1) Inicialización de la ventana y framebuffer
-    let screen_w = 800;
-    let screen_h = 600;
+    let mut screen_w = 800;
+    let mut screen_h = 600;
     let (mut rl, thread) = raylib::init()
         .size(screen_w, screen_h)
         .title("Maze Raycaster 3D")
         .build();
 
+    rl.set_target_fps(15);   // para el requisito (~15 FPS)
+    rl.hide_cursor();
+
     let mut framebuffer = Framebuffer::new(screen_w as u32, screen_h as u32);
 
     // 2) Carga o genera el laberinto
     let args: Vec<String> = env::args().collect();
-    let maze: Maze = if args.len() > 1 {
+    let mut maze: Maze = if args.len() > 1 {
         load_maze(&args[1])
     } else {
         make_maze(20, 15)
     };
-    let block_size = screen_h as usize / maze.len();
+
+    // Tamaño de celda del mundo 
+    let block_size: usize = 64;
 
     // 3) Inicializa al jugador en la 'p' del mapa, con FOV de 60°
     let mut player = {
@@ -57,34 +68,63 @@ fn main() {
         p
     };
 
-    // 3.1) Cargar textura de pared desde assets/  
-   
-    let tex_path = format!(
-        "{}/assets/bricks.jpg",
-        env!("CARGO_MANIFEST_DIR")
+    // 3.1) Cargar texturas y atlas
+    let brick_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("assets")
+        .join("bricks.jpg");
+    let brick = Rc::new(
+        Texture::from_file(brick_path.to_str().unwrap())
+            .expect("No se pudo cargar textura ladrillo"),
     );
-    let wall_tex = Texture::from_file(&tex_path)
-        .expect("No se pudo cargar la textura de pared (JPG/PNG) en assets/");
+
+    let mut atlas = TextureAtlas::new(brick.clone());
+    atlas.insert('#', brick.clone()); // '#': muros estándar
+
+    let stone = Rc::new(Texture::from_file(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("assets")
+            .join("stone.jpg")
+            .to_str()
+            .unwrap(),
+    ).expect("No se pudo cargar textura piedra"));
+    atlas.insert('A', stone); // 'A': piedra 
 
     // 4) Bucle principal
-   while !rl.window_should_close() {
-    let dt = rl.get_frame_time(); // segundos desde el frame anterior
+    while !rl.window_should_close() {
+        // Toggle fullscreen opcional (F11)
+        if rl.is_key_pressed(KeyboardKey::KEY_F11) {
+            rl.toggle_fullscreen();
+        }
 
-    // ahora pasamos maze, block_size y dt
-    process_events(&rl, &mut player, &maze, block_size, dt);
+        // Detectar cambio de tamaño y redimensionar framebuffer
+        let cur_w = rl.get_screen_width();
+        let cur_h = rl.get_screen_height();
+        if cur_w != screen_w || cur_h != screen_h {
+            screen_w = cur_w;
+            screen_h = cur_h;
+            framebuffer.resize(screen_w as u32, screen_h as u32);
+        }
 
-    let mut d = rl.begin_drawing(&thread);
-    framebuffer.clear(Color::BLACK);
+        // Input + física
+        let dt = rl.get_frame_time();
+        process_events(&rl, &mut player, &maze, block_size, dt);
 
-    // render 3D (con textura)
-    render3d(&mut framebuffer, &maze, &player, block_size, &wall_tex);
+        // Render
+        let mut d = rl.begin_drawing(&thread);
+        framebuffer.clear(Color::BLACK);
 
-    // FPS visible (requisito del proyecto)
-   
+        render3d(&mut framebuffer, &maze, &player, block_size, &atlas);
 
-    framebuffer.draw(&mut d);
-    let fps = d.get_fps();
-    d.draw_text(&format!("FPS: {}", fps), screen_w - 90, 10, 20, Color::YELLOW);
-    d.draw_text("←→ rotan, ↑↓ caminan", 10, 10, 20, Color::WHITE);
-}
+        framebuffer.draw(&mut d);
+        draw_minimap(
+            &mut d,
+            &maze,
+            &player,
+            block_size,
+            screen_w, screen_h,
+    MiniMapOpts { tile: 6, margin: 10, corner: Corner::TopRight }
+        );
+        d.draw_fps(10, 10);
+        d.draw_text("< >  girar, Ʌ V avanzar/retroceder ", 10, 40, 20, Color::WHITE);
+    }
 }

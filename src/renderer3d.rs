@@ -5,7 +5,8 @@ use crate::{
     maze::Maze,
     player::Player,
     caster::cast_ray,
-    texture::Texture, // <-- para el tipo de textura
+    texture::Texture,     
+    textures::TextureAtlas, 
 };
 
 pub fn render3d(
@@ -13,22 +14,21 @@ pub fn render3d(
     maze: &Maze,
     player: &Player,
     block_size: usize,
-    wall_tex: &Texture, // <-- NUEVO argumento
+    atlas: &TextureAtlas,   
 ) {
     let num_rays        = framebuffer.width;
     let hw              = framebuffer.width  as f32 / 2.0;
     let hh              = framebuffer.height as f32 / 2.0;
     let dist_proj_plane = hw / (player.fov / 2.0).tan();
 
-    // 1) Pintar cielo
+    // Cielo
     framebuffer.set_current_color(Color::SKYBLUE);
     for y in 0..(hh as u32) {
         for x in 0..framebuffer.width {
             framebuffer.set_pixel(x, y);
         }
     }
-
-    // 2) Pintar suelo
+    // Suelo
     framebuffer.set_current_color(Color::BLACK);
     for y in (hh as u32)..framebuffer.height {
         for x in 0..framebuffer.width {
@@ -39,7 +39,6 @@ pub fn render3d(
     let max_distance = (maze[0].len() * block_size) as f32;
     let step = 2;
 
-    // 3) Raycasting con textura
     for col in (0..num_rays).step_by(step as usize) {
         let current_ray = col as f32 / num_rays as f32;
         let angle = player.a - (player.fov / 2.0)
@@ -47,13 +46,13 @@ pub fn render3d(
 
         let hit = cast_ray(framebuffer, maze, player, angle, block_size, false);
         let distance = hit.distance.max(0.0001);
-
         let dist_perp = distance * (angle - player.a).cos();
+
         let stake_height = (block_size as f32 / dist_perp) * dist_proj_plane;
         let top    = (hh - stake_height / 2.0).max(0.0) as i32;
         let bottom = (hh + stake_height / 2.0).min(framebuffer.height as f32) as i32;
 
-        // Punto de impacto
+        // Punto de impacto en mundo
         let hit_x = player.pos.x + distance * angle.cos();
         let hit_y = player.pos.y + distance * angle.sin();
 
@@ -61,7 +60,7 @@ pub fn render3d(
         let lx = ((hit_x as i32 % block_size as i32) + block_size as i32) % block_size as i32;
         let ly = ((hit_y as i32 % block_size as i32) + block_size as i32) % block_size as i32;
 
-        // Detectar lado y coord U
+        // Detectar lado -> coord U
         let to_left   = lx;
         let to_right  = (block_size as i32 - 1) - lx;
         let to_top    = ly;
@@ -78,6 +77,9 @@ pub fn render3d(
         };
         if u < 0.0 { u += 1.0; }
 
+        // Elegir textura según el char del muro impactado:
+        let wall_tex: &Texture = atlas.get(hit.impact);
+
         // Sombreado por distancia
         let shade = 1.0 - (distance / max_distance).min(1.0);
 
@@ -91,16 +93,13 @@ pub fn render3d(
 
             for y in y0..=y1 {
                 let v = (y - y0) as f32 / denom; // 0..1 vertical
-
                 let texel = wall_tex.sample(u, v);
+
                 let a = ((texel >> 24) & 0xFF) as u8;
                 let mut r = ((texel >> 16) & 0xFF) as f32;
                 let mut g = ((texel >> 8)  & 0xFF) as f32;
                 let mut b = ( texel        & 0xFF) as f32;
-
-                r *= shade;
-                g *= shade;
-                b *= shade;
+                r *= shade; g *= shade; b *= shade;
 
                 framebuffer.set_current_color(Color::new(r as u8, g as u8, b as u8, a));
                 framebuffer.set_pixel(x_screen as u32, y as u32);
