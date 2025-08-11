@@ -72,7 +72,7 @@ pub fn make_maze(cell_w: usize, cell_h: usize) -> Maze {
     maze
 }
 
-/// Convierte parte de los muros '#' a 'A' con un patrón tipo “franjas”.
+/// Convierte parte de los muros '#' a 'A' con un patrón tipo franjas.
 /// No toca bordes, ni 'p'/'g', ni espacios.
 fn retile_walls_stripes(maze: &mut Maze) {
     let h = maze.len();
@@ -82,9 +82,9 @@ fn retile_walls_stripes(maze: &mut Maze) {
     for j in 1..h - 1 {
         for i in 1..w - 1 {
             if maze[j][i] == '#' {
-                // Ensancha la franja usando i/2 y j/2; cambia el 3 para más/menos densidad.
+                // Ensancha la franja usando i/2 y j/2; 
                 if ((i / 2) + (j / 2)) % 3 == 0 {
-                    maze[j][i] = 'A'; // esta pared usará la textura mapeada a 'A' en tu atlas
+                    maze[j][i] = 'A'; 
                 }
             }
         }
