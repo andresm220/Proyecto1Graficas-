@@ -10,14 +10,14 @@ use crate::{
 };
 
 /// Render de paredes + escritura de z-buffer (distancia perpendicular por columna).
-/// `zbuf.len()` debe ser == framebuffer.width as usize y lo debes limpiar fuera con INFINITY.
+
 pub fn render3d(
     framebuffer: &mut Framebuffer,
     maze: &Maze,
     player: &Player,
     block_size: usize,
     atlas: &TextureAtlas,
-    zbuf: &mut [f32],          // <-- NUEVO
+    zbuf: &mut [f32],         
 ) {
     let num_rays        = framebuffer.width;
     let hw              = framebuffer.width  as f32 / 2.0;
@@ -48,9 +48,9 @@ pub fn render3d(
 
         let hit = cast_ray(framebuffer, maze, player, angle, block_size, false);
         let distance  = hit.distance.max(0.0001);
-        let dist_perp = distance * (angle - player.a).cos(); // corrección de “fish-eye”
+        let dist_perp = distance * (angle - player.a).cos(); 
 
-        // >>> Escribir z-buffer para estas columnas (si step=2, ambas)
+        // >>> Escribir z-buffer para estas columnas 
         for dx in 0..step {
             let x = (col + dx as u32).min(num_rays - 1) as usize;
             zbuf[x] = dist_perp;
