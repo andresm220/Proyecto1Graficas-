@@ -41,6 +41,42 @@ pub fn process_events(
         dy += (player.a + std::f32::consts::FRAC_PI_2).sin() * PLAYER_SPEED * dt;
     }
 
+    // Soporte de gamepad (id 0)
+if rl.is_gamepad_available(0) {
+    // sticks
+    let lx = rl.get_gamepad_axis_movement(0, GamepadAxis::GAMEPAD_AXIS_LEFT_X);
+    let ly = rl.get_gamepad_axis_movement(0, GamepadAxis::GAMEPAD_AXIS_LEFT_Y);
+    let rx = rl.get_gamepad_axis_movement(0, GamepadAxis::GAMEPAD_AXIS_RIGHT_X);
+
+    // avanzar/retroceder con stick izquierdo (Y invertida)
+    let fwd = -ly;
+    let strafe = lx;
+
+    // movimiento en mundo
+    // adelante/atrás
+    let speed = PLAYER_SPEED * dt;
+    dx += player.a.cos() * fwd * speed;
+    dy += player.a.sin() * fwd * speed;
+
+    // strafe
+    dx += (player.a + std::f32::consts::FRAC_PI_2).cos() * strafe * speed;
+    dy += (player.a + std::f32::consts::FRAC_PI_2).sin() * strafe * speed;
+
+    // rotación con stick derecho X
+    player.a += rx * 2.5 * dt;
+
+    // botones opcionales: D-Pad como teclas
+    if rl.is_gamepad_button_down(0, GamepadButton::GAMEPAD_BUTTON_LEFT_FACE_UP) {
+        dx += player.a.cos() * speed;
+        dy += player.a.sin() * speed;
+    }
+    if rl.is_gamepad_button_down(0, GamepadButton::GAMEPAD_BUTTON_LEFT_FACE_DOWN) {
+        dx -= player.a.cos() * speed;
+        dy -= player.a.sin() * speed;
+    }
+}
+
+
     // --- COLISIONES (círculo que hace “slide”) ---
     let r = (block_size as f32) * 0.20;
 
