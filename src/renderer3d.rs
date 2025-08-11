@@ -5,16 +5,19 @@ use crate::{
     maze::Maze,
     player::Player,
     caster::cast_ray,
-    texture::Texture,     
-    textures::TextureAtlas, 
+    texture::Texture,
+    textures::TextureAtlas,
 };
 
+/// Render de paredes + escritura de z-buffer (distancia perpendicular por columna).
+/// `zbuf.len()` debe ser == framebuffer.width as usize y lo debes limpiar fuera con INFINITY.
 pub fn render3d(
     framebuffer: &mut Framebuffer,
     maze: &Maze,
     player: &Player,
     block_size: usize,
-    atlas: &TextureAtlas,   
+    atlas: &TextureAtlas,
+    zbuf: &mut [f32],          // <-- NUEVO
 ) {
     let num_rays        = framebuffer.width;
     let hw              = framebuffer.width  as f32 / 2.0;
@@ -41,13 +44,19 @@ pub fn render3d(
 
     for col in (0..num_rays).step_by(step as usize) {
         let current_ray = col as f32 / num_rays as f32;
-        let angle = player.a - (player.fov / 2.0)
-                  + (player.fov * current_ray);
+        let angle = player.a - (player.fov / 2.0) + (player.fov * current_ray);
 
         let hit = cast_ray(framebuffer, maze, player, angle, block_size, false);
-        let distance = hit.distance.max(0.0001);
-        let dist_perp = distance * (angle - player.a).cos();
+        let distance  = hit.distance.max(0.0001);
+        let dist_perp = distance * (angle - player.a).cos(); // corrección de “fish-eye”
 
+        // >>> Escribir z-buffer para estas columnas (si step=2, ambas)
+        for dx in 0..step {
+            let x = (col + dx as u32).min(num_rays - 1) as usize;
+            zbuf[x] = dist_perp;
+        }
+
+        // Altura de la columna
         let stake_height = (block_size as f32 / dist_perp) * dist_proj_plane;
         let top    = (hh - stake_height / 2.0).max(0.0) as i32;
         let bottom = (hh + stake_height / 2.0).min(framebuffer.height as f32) as i32;
@@ -77,7 +86,7 @@ pub fn render3d(
         };
         if u < 0.0 { u += 1.0; }
 
-        // Elegir textura según el char del muro impactado:
+        // Textura según el char del muro impactado
         let wall_tex: &Texture = atlas.get(hit.impact);
 
         // Sombreado por distancia
