@@ -29,22 +29,7 @@ pub fn process_events(
     if rl.is_key_down(KeyboardKey::KEY_D) { dx += (player.a + std::f32::consts::FRAC_PI_2).cos() * PLAYER_SPEED * dt;
                                             dy += (player.a + std::f32::consts::FRAC_PI_2).sin() * PLAYER_SPEED * dt; }
 
-    // Gamepad (id 0)
-    if rl.is_gamepad_available(0) {
-        let lx = rl.get_gamepad_axis_movement(0, GamepadAxis::GAMEPAD_AXIS_LEFT_X);
-        let ly = rl.get_gamepad_axis_movement(0, GamepadAxis::GAMEPAD_AXIS_LEFT_Y);
-        let rx = rl.get_gamepad_axis_movement(0, GamepadAxis::GAMEPAD_AXIS_RIGHT_X);
-        let lxf = if lx.abs() < GAMEPAD_DEADZONE { 0.0 } else { lx };
-        let lyf = if ly.abs() < GAMEPAD_DEADZONE { 0.0 } else { ly };
-        let rxf = if rx.abs() < GAMEPAD_DEADZONE { 0.0 } else { rx };
-        let speed = PLAYER_SPEED * dt;
 
-        dx +=  player.a.cos() * (-lyf) * speed;
-        dy +=  player.a.sin() * (-lyf) * speed;
-        dx += (player.a + std::f32::consts::FRAC_PI_2).cos() * lxf * speed;
-        dy += (player.a + std::f32::consts::FRAC_PI_2).sin() * lxf * speed;
-        player.a += rxf * 2.5 * dt;
-    }
 
     // Colisiones contra mapa (slide) + 
     let r = (block_size as f32) * 0.20;
