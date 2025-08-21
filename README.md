@@ -39,8 +39,3 @@ cargo run --release
 
 
 
-# Compila y ejecuta en modo debug
-cargo run
-
-# Recomendado para mejor rendimiento
-cargo run --release
